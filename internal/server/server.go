@@ -38,6 +38,7 @@ func NewServer() *Server {
 func (s *Server) Run() {
 	go s.matchPlayers()
 	http.HandleFunc("/ws", s.handleWebSocket)
+	http.HandleFunc("/scoreboard", s.handleScoreboard) // New REST endpoint
 	log.Println("Server starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
@@ -253,5 +254,21 @@ func (s *Server) removePlayer(player *models.Player) {
 	if !player.Closed {
 		close(player.SendChan)
 		player.Closed = true
+	}
+}
+
+func (s *Server) handleScoreboard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(s.scoreboard); err != nil {
+		log.Printf("Failed to encode scoreboard: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }

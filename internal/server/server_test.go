@@ -156,3 +156,70 @@ func TestScoreboardUpdate(t *testing.T) {
 		t.Errorf("Scoreboard mismatch: expected player1 losses=1, player2 wins=1, got %+v", scoreUpdate1.Scoreboard)
 	}
 }
+
+func TestScoreboardREST(t *testing.T) {
+	s := NewServer()
+	go s.matchPlayers()
+
+	// Start the server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ws" {
+			s.handleWebSocket(w, r)
+		} else if r.URL.Path == "/scoreboard" {
+			s.handleScoreboard(w, r)
+		}
+	}))
+	defer server.Close()
+
+	// Connect players
+	wsURL := "ws" + server.URL[4:] + "/ws"
+	conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Dial error for player 1: %v", err)
+	}
+	defer conn1.Close()
+
+	_, msg1, _ := conn1.ReadMessage()
+	var connMsg1 models.Message
+	json.Unmarshal(msg1, &connMsg1)
+	player1ID := connMsg1.PlayerID
+
+	conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Dial error for player 2: %v", err)
+	}
+	defer conn2.Close()
+
+	_, msg2, _ := conn2.ReadMessage()
+	var connMsg2 models.Message
+	json.Unmarshal(msg2, &connMsg2)
+	player2ID := connMsg2.PlayerID
+
+	// Play a game
+	_, _, _ = conn1.ReadMessage() // start_game
+	_, _, _ = conn2.ReadMessage() // start_game
+	conn1.WriteMessage(websocket.TextMessage, []byte(`{"event":"player_choice","playerId":"`+player1ID+`","choice":"rock"}`))
+	conn2.WriteMessage(websocket.TextMessage, []byte(`{"event":"player_choice","playerId":"`+player2ID+`","choice":"paper"}`))
+	_, _, _ = conn1.ReadMessage() // game_result
+	_, _, _ = conn2.ReadMessage() // game_result
+
+	// Test REST endpoint
+	resp, err := http.Get(server.URL + "/scoreboard")
+	if err != nil {
+		t.Fatalf("GET error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	var scoreboard map[string]models.Score
+	if err := json.NewDecoder(resp.Body).Decode(&scoreboard); err != nil {
+		t.Fatalf("Decode error: %v", err)
+	}
+
+	if scoreboard[player1ID].Losses != 1 || scoreboard[player2ID].Wins != 1 {
+		t.Errorf("Scoreboard mismatch: expected player1 losses=1, player2 wins=1, got %+v", scoreboard)
+	}
+}
