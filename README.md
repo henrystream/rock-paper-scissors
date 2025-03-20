@@ -1,12 +1,13 @@
 # Rock-Paper-Scissors Game Server
 
-A real-time multiplayer game server in Go using WebSockets.
+- A real-time multiplayer game server in Go using WebSockets.
+- Global scoreboard updated after each match.
 
 ## Setup
 
 1. Clone the repo:
    ```bash
-   git clone https://github.com/henrystream/rock-paper-scissor.git
+   git clone https://github.com/henrystream/rock-paper-scissors.git
    cd rock-paper-scissor
    ```
 
@@ -38,3 +39,4 @@ Both should receive "start_game", then proceed to send choices.
 - Start Game: {"event": "start_game", "opponentId": "uuid"}
 - Send Choice: {"event": "player_choice", "playerId": "uuid", "choice": "rock"}
 - Game Result: {"event": "game_result", "winner": "uuid or 'draw'", "playerChoice": "rock", "opponentChoice": "scissors"}
+- Scoreboard Update: `{"event": "scoreboard_update", "scoreboard": {"<playerId>": {"wins": 1, "losses": 0, "draws": 0}, ...}}`

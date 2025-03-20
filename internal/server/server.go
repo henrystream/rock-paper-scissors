@@ -19,17 +19,19 @@ var upgrader = websocket.Upgrader{
 }
 
 type Server struct {
-	players map[string]*models.Player
-	queue   chan *models.Player
-	matches map[string]*models.Match
-	mu      sync.Mutex
+	players    map[string]*models.Player
+	queue      chan *models.Player
+	matches    map[string]*models.Match
+	scoreboard map[string]models.Score // Global scoreboard
+	mu         sync.Mutex
 }
 
 func NewServer() *Server {
 	return &Server{
-		players: make(map[string]*models.Player),
-		queue:   make(chan *models.Player, 10),
-		matches: make(map[string]*models.Match),
+		players:    make(map[string]*models.Player),
+		queue:      make(chan *models.Player, 10),
+		matches:    make(map[string]*models.Match),
+		scoreboard: make(map[string]models.Score),
 	}
 }
 
@@ -154,6 +156,11 @@ func (s *Server) processMatch(match *models.Match) {
 		return
 	}
 
+	// Update scoreboard
+	s.mu.Lock()
+	s.updateScoreboard(match, winner)
+	s.mu.Unlock()
+
 	result := models.Message{
 		Event:          "game_result",
 		Winner:         winner,
@@ -175,8 +182,53 @@ func (s *Server) processMatch(match *models.Match) {
 	match.Player2.Choice = ""
 	s.mu.Unlock()
 
+	// Broadcast scoreboard
+	s.broadcastScoreboard()
+
 	s.queue <- match.Player1
 	s.queue <- match.Player2
+}
+
+func (s *Server) updateScoreboard(match *models.Match, winner string) {
+	p1Score := s.scoreboard[match.Player1.ID]
+	p2Score := s.scoreboard[match.Player2.ID]
+
+	switch winner {
+	case "player1":
+		p1Score.Wins++
+		p2Score.Losses++
+	case "player2":
+		p2Score.Wins++
+		p1Score.Losses++
+	case "draw":
+		p1Score.Draws++
+		p2Score.Draws++
+	}
+
+	s.scoreboard[match.Player1.ID] = p1Score
+	s.scoreboard[match.Player2.ID] = p2Score
+}
+
+func (s *Server) broadcastScoreboard() {
+	s.mu.Lock()
+	msg := models.Message{
+		Event:      "scoreboard_update",
+		Scoreboard: s.scoreboard,
+	}
+	data, _ := json.Marshal(msg)
+	s.mu.Unlock()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, player := range s.players {
+		if !player.Closed {
+			select {
+			case player.SendChan <- data:
+			default:
+				log.Printf("Failed to send scoreboard to player %s, channel full", player.ID)
+			}
+		}
+	}
 }
 
 func (s *Server) removePlayer(player *models.Player) {

@@ -1,4 +1,3 @@
-// internal/models/models.go
 package models
 
 import (
@@ -10,10 +9,10 @@ import (
 type Player struct {
 	ID       string
 	Conn     *websocket.Conn
-	Choice   string // "rock", "paper", "scissors", or empty if not chosen
+	Choice   string
 	InMatch  bool
-	SendChan chan []byte // Channel to send messages to the player
-	Closed   bool        //Track if SendChan is closed
+	SendChan chan []byte
+	Closed   bool
 }
 
 // Match represents a game between two players
@@ -22,15 +21,23 @@ type Match struct {
 	Player2 *Player
 }
 
+// Score represents a player's scoreboard stats
+type Score struct {
+	Wins   int `json:"wins"`
+	Losses int `json:"losses"`
+	Draws  int `json:"draws"`
+}
+
 // Message represents WebSocket communication
 type Message struct {
-	Event          string `json:"event"`
-	PlayerID       string `json:"playerId,omitempty"`
-	OpponentID     string `json:"opponentId,omitempty"`
-	Choice         string `json:"choice,omitempty"`
-	Winner         string `json:"winner,omitempty"` // PlayerID or "draw"
-	PlayerChoice   string `json:"playerChoice,omitempty"`
-	OpponentChoice string `json:"opponentChoice,omitempty"`
+	Event          string           `json:"event"`
+	PlayerID       string           `json:"playerId,omitempty"`
+	OpponentID     string           `json:"opponentId,omitempty"`
+	Choice         string           `json:"choice,omitempty"`
+	Winner         string           `json:"winner,omitempty"`
+	PlayerChoice   string           `json:"playerChoice,omitempty"`
+	OpponentChoice string           `json:"opponentChoice,omitempty"`
+	Scoreboard     map[string]Score `json:"scoreboard,omitempty"` // For scoreboard updates
 }
 
 // NewPlayer creates a player with a unique ID
